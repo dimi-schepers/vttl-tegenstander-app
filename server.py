@@ -205,5 +205,7 @@ def get_results(player_id):
 
 
 if __name__ == '__main__':
-    print("VTTL App running at http://localhost:3000")
-    app.run(port=3000, debug=False)
+    import os
+    port = int(os.environ.get('PORT', 3000))
+    print(f"VTTL App running at http://localhost:{port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
