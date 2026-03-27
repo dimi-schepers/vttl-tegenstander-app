@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VTTL Match Analyse</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a365d;
+      color: white;
+      padding: 1.25rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    header h1 { font-size: 1.4rem; font-weight: 700; }
+    header span { font-size: 0.85rem; opacity: 0.7; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .pickers {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .picker-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #4a5568;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.75rem;
+    }
+
+    .picker-row { margin-bottom: 0.5rem; position: relative; }
+
+    .picker-row label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #718096;
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .picker-row input {
+      width: 100%;
+      padding: 0.55rem 0.85rem;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      transition: border-color 0.15s;
+    }
+
+    .picker-row input:focus { outline: none; border-color: #3182ce; }
+    .picker-row input:disabled { background: #f7fafc; color: #a0aec0; cursor: not-allowed; }
+
+    .dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0; right: 0;
+      background: white;
+      border: 2px solid #3182ce;
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .dropdown-item {
+      padding: 0.5rem 0.85rem;
+      font-size: 0.88rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .dropdown-item:hover, .dropdown-item.focused { background: #ebf8ff; }
+    .dropdown-item .item-rank { font-size: 0.72rem; font-weight: 700; color: #2b6cb0; min-width: 28px; }
+    .dropdown-item .item-name { flex: 1; }
+
+    .selected-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: #ebf8ff;
+      border: 2px solid #90cdf4;
+      border-radius: 8px;
+      font-size: 0.88rem;
+    }
+
+    .selected-badge .badge-name { font-weight: 700; color: #2c5282; flex: 1; }
+    .selected-badge .badge-rank { font-size: 0.72rem; font-weight: 700; color: #2b6cb0; background: white; padding: 0.1rem 0.4rem; border-radius: 4px; }
+    .selected-badge .badge-clear { cursor: pointer; color: #718096; font-size: 1rem; line-height: 1; margin-left: auto; }
+    .selected-badge .badge-clear:hover { color: #e53e3e; }
+
+    .analyse-row { display: flex; justify-content: flex-end; margin-top: 0.5rem; }
+
+    .player-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      color: #718096;
+      margin-top: 0.3rem;
+    }
+
+    .player-badge strong { color: #2d3748; font-size: 0.9rem; }
+    .player-badge .rank { background: #ebf8ff; color: #2b6cb0; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: 700; }
+
+    button {
+      background: #3182ce;
+      color: white;
+      border: none;
+      padding: 0.65rem 1.5rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    button:hover { background: #2c5282; }
+    button:disabled { background: #a0aec0; cursor: not-allowed; }
+
+    .loading {
+      text-align: center;
+      padding: 3rem;
+      color: #718096;
+    }
+
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #e2e8f0;
+      border-top-color: #3182ce;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error {
+      background: #fff5f5;
+      border: 1px solid #fed7d7;
+      color: #c53030;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+
+    /* Matrix */
+    .matrix-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: #2d3748;
+    }
+
+    .matrix-subtitle {
+      font-size: 0.85rem;
+      color: #718096;
+      margin-bottom: 1.5rem;
+    }
+
+    .matrix-grid {
+      display: grid;
+      grid-template-columns: 40px 1fr 1fr;
+      grid-template-rows: 40px 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 1.5rem;
+    }
+
+    .axis-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #718096;
+    }
+
+    .axis-label.vertical {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      grid-row: 2 / 4;
+      grid-column: 1;
+    }
+
+    .col-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border-radius: 8px;
+      padding: 0.4rem;
+      gap: 0.3rem;
+    }
+
+    .col-header.won-header { background: #c6f6d5; color: #276749; }
+    .col-header.lost-header { background: #fed7d7; color: #9b2c2c; }
+
+    .row-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border-radius: 8px;
+      padding: 0.4rem;
+      gap: 0.3rem;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+    }
+
+    .row-header.won-header { background: #c6f6d5; color: #276749; }
+    .row-header.lost-header { background: #fed7d7; color: #9b2c2c; }
+
+    .matrix-cell {
+      background: #f7fafc;
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 0.75rem;
+      min-height: 140px;
+      transition: border-color 0.15s;
+    }
+
+    .cell-ww { border-color: #68d391; background: #f0fff4; }
+    .cell-wl { border-color: #63b3ed; background: #ebf8ff; }
+    .cell-lw { border-color: #f6ad55; background: #fffaf0; }
+    .cell-ll { border-color: #fc8181; background: #fff5f5; }
+
+    .cell-count {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+      line-height: 1;
+    }
+
+    .cell-ww .cell-count { color: #22543d; }
+    .cell-wl .cell-count { color: #2a4365; }
+    .cell-lw .cell-count { color: #7b341e; }
+    .cell-ll .cell-count { color: #742a2a; }
+
+    .cell-label {
+      font-size: 0.7rem;
+      color: #718096;
+      margin-bottom: 0.6rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .player-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .player-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity 0.1s, transform 0.1s;
+      border: 1px solid transparent;
+    }
+
+    .player-chip:hover { opacity: 0.8; transform: translateX(2px); }
+
+    .cell-ww .player-chip { background: #c6f6d5; color: #22543d; border-color: #9ae6b4; }
+    .cell-wl .player-chip { background: #bee3f8; color: #2a4365; border-color: #90cdf4; }
+    .cell-lw .player-chip { background: #feebc8; color: #7b341e; border-color: #f6ad55; }
+    .cell-ll .player-chip { background: #fed7d7; color: #742a2a; border-color: #fc8181; }
+
+    .chip-rank {
+      font-weight: 800;
+      font-size: 0.7rem;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    .chip-name { font-weight: 600; flex: 1; }
+
+    .chip-scores {
+      font-size: 0.68rem;
+      opacity: 0.75;
+      white-space: nowrap;
+    }
+
+    .chip-score-p1 { font-weight: 600; }
+    .chip-score-sep { opacity: 0.5; }
+    .chip-score-p2 { }
+
+    .cell-mixed { border-color: #cbd5e0; background: #f7fafc; }
+    .cell-mixed .cell-count { color: #4a5568; }
+    .cell-mixed .player-chip { background: #edf2f7; color: #4a5568; border-color: #cbd5e0; }
+
+    /* Summary row */
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    .stat-box {
+      text-align: center;
+      padding: 1rem;
+      border-radius: 10px;
+      background: #f7fafc;
+    }
+
+    .stat-box .num { font-size: 2rem; font-weight: 800; }
+    .stat-box .lbl { font-size: 0.75rem; color: #718096; margin-top: 0.2rem; }
+
+    .stat-box.ww { background: #f0fff4; }
+    .stat-box.ww .num { color: #22543d; }
+    .stat-box.wl { background: #ebf8ff; }
+    .stat-box.wl .num { color: #2a4365; }
+    .stat-box.lw { background: #fff5f5; }
+    .stat-box.lw .num { color: #742a2a; }
+    .stat-box.ll .num { color: #4a5568; }
+
+    .legend {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      font-size: 0.82rem;
+      color: #4a5568;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .legend-item { display: flex; align-items: center; gap: 0.4rem; }
+
+    /* Head-to-head */
+    .h2h-meta {
+      font-size: 0.82rem;
+      color: #718096;
+      margin-bottom: 0.75rem;
+    }
+
+    .h2h-list { display: flex; flex-direction: column; gap: 6px; }
+
+    .h2h-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background: #f7fafc;
+      border-radius: 8px;
+      font-size: 0.88rem;
+    }
+
+    .h2h-date { color: #718096; min-width: 90px; font-size: 0.8rem; }
+
+    .h2h-score {
+      font-weight: 800;
+      font-size: 1rem;
+      min-width: 36px;
+      text-align: center;
+      padding: 0.15rem 0.5rem;
+      border-radius: 6px;
+    }
+
+    .h2h-win  { background: #c6f6d5; color: #22543d; }
+    .h2h-loss { background: #fed7d7; color: #742a2a; }
+
+    .h2h-label { color: #4a5568; font-size: 0.82rem; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    .axis-p1-name, .axis-p2-name {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #2d3748;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>VTTL Match Analyse</h1>
+    <span>Vergelijk uitslagen tussen twee spelers</span>
+  </div>
+</header>
+
+<div class="container">
+  <div class="card">
+    <div class="pickers">
+      <div id="picker1"></div>
+      <div id="picker2"></div>
+    </div>
+    <div class="analyse-row">
+      <button id="loadBtn" onclick="loadData()" disabled>Analyseer</button>
+    </div>
+  </div>
+
+  <div id="output"></div>
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let allClubs = [];
+  let player1Data = null;
+  let player2Data = null;
+  const selected = { 1: null, 2: null }; // { id, name, ranking }
+
+  // ── Club + player picker ───────────────────────────────────────────────────
+  function createPicker(slot, label) {
+    const root = document.getElementById(`picker${slot}`);
+    root.innerHTML = `
+      <div class="picker-label">${label}</div>
+      <div class="picker-row" id="clubRow${slot}">
+        <label>Club</label>
+        <input id="clubSearch${slot}" type="text" placeholder="Zoek club…" autocomplete="off">
+        <div class="dropdown" id="clubDrop${slot}" style="display:none"></div>
+      </div>
+      <div class="picker-row" id="playerRow${slot}">
+        <label>Speler</label>
+        <input id="playerSearch${slot}" type="text" placeholder="Zoek op naam…" autocomplete="off" disabled>
+        <div class="dropdown" id="playerDrop${slot}" style="display:none"></div>
+      </div>
+      <div id="selectedBadge${slot}"></div>
+    `;
+
+    const clubInput   = document.getElementById(`clubSearch${slot}`);
+    const clubDrop    = document.getElementById(`clubDrop${slot}`);
+    const playerInput = document.getElementById(`playerSearch${slot}`);
+    const playerDrop  = document.getElementById(`playerDrop${slot}`);
+
+    let clubPlayers = [];
+    let selectedClub = null;
+
+    // — Club search —
+    clubInput.addEventListener('input', () => {
+      const q = clubInput.value.trim().toLowerCase();
+      const matches = q.length < 1
+        ? allClubs.slice(0, 80)
+        : allClubs.filter(c => c.name.toLowerCase().includes(q));
+      renderDrop(clubDrop, matches.slice(0, 60), c => c.name, async c => {
+        selectedClub = c;
+        clubInput.value = c.name;
+        clubDrop.style.display = 'none';
+        playerInput.disabled = true;
+        playerInput.value = '';
+        playerDrop.style.display = 'none';
+        playerInput.placeholder = 'Laden…';
+        clubPlayers = await fetchClubPlayers(c.id);
+        playerInput.disabled = false;
+        playerInput.placeholder = 'Zoek op naam…';
+        playerInput.focus();
+        showPlayerDrop('');
+      });
+      clubDrop.style.display = matches.length ? 'block' : 'none';
+    });
+
+    clubInput.addEventListener('focus', () => {
+      if (!clubInput.value) clubInput.dispatchEvent(new Event('input'));
+    });
+
+    // — Player search —
+    playerInput.addEventListener('input', () => showPlayerDrop(playerInput.value));
+    playerInput.addEventListener('focus', () => showPlayerDrop(playerInput.value));
+
+    function showPlayerDrop(q) {
+      const term = q.trim().toLowerCase();
+      const matches = term.length < 1
+        ? clubPlayers.slice(0, 80)
+        : clubPlayers.filter(p => p.name.toLowerCase().includes(term));
+      renderDrop(playerDrop, matches.slice(0, 60),
+        p => `<span class="item-rank">${p.ranking}</span><span class="item-name">${p.name}</span>`,
+        p => {
+          selected[slot] = p;
+          playerInput.value = p.name;
+          playerDrop.style.display = 'none';
+          renderBadge(slot);
+          checkReady();
+        }, true);
+      playerDrop.style.display = matches.length ? 'block' : 'none';
+    }
+
+    // — Close dropdowns on outside click —
+    document.addEventListener('click', e => {
+      if (!root.contains(e.target)) {
+        clubDrop.style.display = 'none';
+        playerDrop.style.display = 'none';
+      }
+    });
+  }
+
+  function renderDrop(drop, items, labelFn, onSelect, isHTML = false) {
+    drop.innerHTML = items.map((item, i) => {
+      const label = isHTML ? labelFn(item) : labelFn(item);
+      return `<div class="dropdown-item" data-i="${i}">${isHTML ? label : escHtml(label)}</div>`;
+    }).join('');
+    drop.querySelectorAll('.dropdown-item').forEach((el, i) => {
+      el.addEventListener('mousedown', e => { e.preventDefault(); onSelect(items[i]); });
+    });
+  }
+
+  function renderBadge(slot) {
+    const p = selected[slot];
+    const el = document.getElementById(`selectedBadge${slot}`);
+    if (!p) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <div class="selected-badge">
+        <span class="badge-rank">${p.ranking || '?'}</span>
+        <span class="badge-name">${escHtml(p.name)}</span>
+        <span class="badge-clear" title="Wis selectie" onclick="clearPlayer(${slot})">×</span>
+      </div>`;
+  }
+
+  function clearPlayer(slot) {
+    selected[slot] = null;
+    document.getElementById(`playerSearch${slot}`).value = '';
+    document.getElementById(`selectedBadge${slot}`).innerHTML = '';
+    checkReady();
+  }
+
+  function checkReady() {
+    document.getElementById('loadBtn').disabled = !(selected[1] && selected[2]);
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── API calls ──────────────────────────────────────────────────────────────
+  const clubPlayersCache = {};
+
+  async function fetchClubPlayers(clubId) {
+    if (clubPlayersCache[clubId]) return clubPlayersCache[clubId];
+    const res = await fetch(`/api/clubs/${clubId}/players`);
+    const data = await res.json();
+    clubPlayersCache[clubId] = data;
+    return data;
+  }
+
+  async function fetchPlayer(id) {
+    const res = await fetch(`/api/results/${id}`);
+    if (!res.ok) throw new Error(`Speler ${id} kon niet geladen worden`);
+    return res.json();
+  }
+
+  // ── Load & analyse ─────────────────────────────────────────────────────────
+  async function loadData() {
+    const p1 = selected[1], p2 = selected[2];
+    const btn = document.getElementById('loadBtn');
+    const output = document.getElementById('output');
+
+    btn.disabled = true;
+    btn.textContent = 'Laden...';
+    output.innerHTML = `<div class="loading"><div class="spinner"></div>Uitslagen ophalen...</div>`;
+
+    try {
+      [player1Data, player2Data] = await Promise.all([fetchPlayer(p1.id), fetchPlayer(p2.id)]);
+      renderMatrix();
+    } catch (err) {
+      output.innerHTML = `<div class="error">${err.message}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Analyseer';
+    }
+  }
+
+  function renderMatrix() {
+    const p1Results = player1Data.results;
+    const p2Results = player2Data.results;
+
+    // Build map: opponentId -> {won, name, ranking} for each player
+    const p1Map = new Map();
+    for (const r of p1Results) {
+      // If played multiple times, track all results but use last for display
+      if (!p1Map.has(r.opponentId)) p1Map.set(r.opponentId, []);
+      p1Map.get(r.opponentId).push(r);
+    }
+
+    const p2Map = new Map();
+    for (const r of p2Results) {
+      if (!p2Map.has(r.opponentId)) p2Map.set(r.opponentId, []);
+      p2Map.get(r.opponentId).push(r);
+    }
+
+    // One entry per unique opponent. Mixed results → separate gray cell.
+    const ww = [], wl = [], lw = [], ll = [], mixed = [];
+
+    for (const [oppId, p1Matches] of p1Map) {
+      if (!p2Map.has(oppId)) continue;
+      const p2Matches = p2Map.get(oppId);
+
+      const p1AllWon  = p1Matches.every(m => m.won);
+      const p1AllLost = p1Matches.every(m => !m.won);
+      const p2AllWon  = p2Matches.every(m => m.won);
+      const p2AllLost = p2Matches.every(m => !m.won);
+      const p1Mixed   = !p1AllWon && !p1AllLost;
+      const p2Mixed   = !p2AllWon && !p2AllLost;
+
+      const entry = {
+        id: oppId,
+        name: p1Matches[0].opponentName,
+        ranking: p1Matches[0].opponentRanking,
+        p1Scores: p1Matches.map(m => `${m.playerSets}-${m.opponentSets}`),
+        p2Scores: p2Matches.map(m => `${m.playerSets}-${m.opponentSets}`),
+      };
+
+      if (p1Mixed || p2Mixed)          mixed.push(entry);
+      else if (p1AllWon  && p2AllWon)  ww.push(entry);
+      else if (p1AllWon  && p2AllLost) wl.push(entry);
+      else if (p1AllLost && p2AllWon)  lw.push(entry);
+      else                             ll.push(entry);
+    }
+
+    const p1Name = player1Data.playerName || `Speler ${player1Data.playerId}`;
+    const p2Name = player2Data.playerName || `Speler ${player2Data.playerId}`;
+    const total = ww.length + wl.length + lw.length + ll.length + mixed.length;
+
+    // ── Head-to-head ──────────────────────────────────────────────────────────
+    const h2h = p1Results.filter(r => r.opponentId === player2Data.playerId);
+    const h2hHtml = h2h.length ? h2h.map(r => {
+      const won = r.won;
+      const score = `${r.playerSets}–${r.opponentSets}`;
+      return `
+        <div class="h2h-row">
+          <span class="h2h-date">${r.date}</span>
+          <span class="h2h-score ${won ? 'h2h-win' : 'h2h-loss'}">${score}</span>
+          <span class="h2h-label">${won ? `${p1Name.split(' ')[0]} gewonnen` : `${p2Name.split(' ')[0]} gewonnen`}</span>
+        </div>`;
+    }).join('') : `<span style="color:#a0aec0;font-size:0.85rem">Geen onderlinge wedstrijden gevonden dit seizoen.</span>`;
+
+    const h2hWins  = h2h.filter(r => r.won).length;
+    const h2hLoss  = h2h.length - h2hWins;
+
+    document.getElementById('output').innerHTML = `
+      <div class="card">
+        <div class="matrix-title">Onderling (head-to-head)</div>
+        <div class="h2h-meta">${h2h.length ? `${h2hWins}× ${p1Name.split(' ')[0]} gewonnen &nbsp;·&nbsp; ${h2hLoss}× ${p2Name.split(' ')[0]} gewonnen` : ''}</div>
+        <div class="h2h-list">${h2hHtml}</div>
+      </div>
+      <div class="card">
+        <div class="matrix-title">Gemeenschappelijke tegenstanders</div>
+        <div class="matrix-subtitle">
+          ${total} gemeenschappelijke tegenstanders —
+          zowel <strong>${p1Name}</strong> als <strong>${p2Name}</strong> gespeeld dit seizoen
+        </div>
+
+        <div style="overflow-x:auto">
+          <div style="min-width:460px">
+            <!-- Column headers -->
+            <div style="display:grid;grid-template-columns:110px 1fr 1fr;gap:8px;margin-bottom:4px;margin-left:44px">
+              <div></div>
+              <div class="col-header won-header">
+                <span>✓</span>
+                <div>
+                  <div style="font-size:0.65rem;opacity:0.8">${p2Name.split(' ')[0]}</div>
+                  <div>Gewonnen</div>
+                </div>
+              </div>
+              <div class="col-header lost-header">
+                <span>✗</span>
+                <div>
+                  <div style="font-size:0.65rem;opacity:0.8">${p2Name.split(' ')[0]}</div>
+                  <div>Verloren</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:44px 110px 1fr 1fr;gap:8px">
+              <!-- Vertical axis label -->
+              <div class="axis-label vertical" style="grid-row:1/3;grid-column:1">${p1Name.split(' ')[0]}</div>
+
+              <!-- Row headers -->
+              <div class="row-header won-header">✓ Gewonnen</div>
+              ${cellHTML('ww', ww, p1Name, p2Name)}
+              ${cellHTML('wl', wl, p1Name, p2Name)}
+
+              <div class="row-header lost-header">✗ Verloren</div>
+              ${cellHTML('lw', lw, p1Name, p2Name)}
+              ${cellHTML('ll', ll, p1Name, p2Name)}
+
+              ${mixed.length ? `
+              <div></div>
+              <div class="row-header" style="background:#edf2f7;color:#718096">~ Wisselend</div>
+              ${cellHTML('mixed', mixed, p1Name, p2Name, 'grid-column:3/5')}
+              ` : ''}
+            </div>
+          </div>
+        </div>
+
+
+        <div class="legend">
+          <span class="legend-item"><span style="color:#22543d">✓</span> = gewonnen van tegenstander</span>
+          <span class="legend-item"><span style="color:#742a2a">✗</span> = verloren van tegenstander</span>
+          <span>Klik op een speler om zijn/haar profiel te openen</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function cellHTML(type, players, p1Name, p2Name, extraStyle = '') {
+    const p1Init = p1Name.split(' ').map(w => w[0]).join('').slice(0, 2);
+    const p2Init = p2Name.split(' ').map(w => w[0]).join('').slice(0, 2);
+
+    const labels = {
+      ww:    `Jij ✓ &amp; ${p2Name.split(' ')[0]} ✓`,
+      wl:    `Jij ✓ &amp; ${p2Name.split(' ')[0]} ✗`,
+      lw:    `Jij ✗ &amp; ${p2Name.split(' ')[0]} ✓`,
+      ll:    `Jij ✗ &amp; ${p2Name.split(' ')[0]} ✗`,
+      mixed: `Wisselende resultaten`,
+    };
+
+    const chips = players
+      .sort((a, b) => (a.ranking || '').localeCompare(b.ranking || ''))
+      .map(p => {
+        const p1ScoreStr = p.p1Scores.join(' & ');
+        const p2ScoreStr = p.p2Scores.join(' & ');
+        return `
+          <a class="player-chip" href="https://competitie.vttl.be/speler/${p.id}/uitslagen/1" target="_blank">
+            <span class="chip-rank">${p.ranking || '?'}</span>
+            <span class="chip-name">${p.name}</span>
+            <span class="chip-scores">
+              <span class="chip-score-p1">${p1Init}: ${p1ScoreStr}</span>
+              <span class="chip-score-sep"> &amp; </span>
+              <span class="chip-score-p2">${p2Init}: ${p2ScoreStr}</span>
+            </span>
+          </a>
+        `;
+      }).join('');
+
+    return `
+      <div class="matrix-cell cell-${type}" ${extraStyle ? `style="${extraStyle}"` : ''}>
+        <div class="cell-count">${players.length}</div>
+        <div class="cell-label">${labels[type]}</div>
+        <div class="player-list">${chips || '<span style="color:#a0aec0;font-size:0.8rem">Geen</span>'}</div>
+      </div>
+    `;
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', async () => {
+    createPicker(1, 'Speler 1 (jij)');
+    createPicker(2, 'Speler 2 (tegenstander)');
+
+    const clubSearch1 = document.getElementById('clubSearch1');
+    const clubSearch2 = document.getElementById('clubSearch2');
+    clubSearch1.placeholder = 'Clubs laden…';
+    clubSearch2.placeholder = 'Clubs laden…';
+    clubSearch1.disabled = true;
+    clubSearch2.disabled = true;
+
+    try {
+      allClubs = await (await fetch('/api/clubs')).json();
+    } finally {
+      clubSearch1.placeholder = 'Zoek club…';
+      clubSearch2.placeholder = 'Zoek club…';
+      clubSearch1.disabled = false;
+      clubSearch2.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
